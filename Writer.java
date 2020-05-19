@@ -35,7 +35,7 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         Scanner scan = new Scanner(System.in);
         System.out.print("Enter nickname: ");
         String name = scan.next();
@@ -55,19 +55,28 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
         }
         initialize(writer);
         writer.registerWithServer(writer.nickname);
+        while(true){
+            System.out.println(writer.receiveQueue);
+            if(writer.receiveQueue.size()>0){
+                String message = writer.receiveQueue.remove();
+                if(message.equals("[controller]: begin")){
+                    break;
+                }
+            }
+        }
         Runnable writerComm = new DBWriter(writer.nickname, writer);
         executor.execute(writerComm);
         while(writer.getIsSafe()){
+            Thread.sleep(200);
             if(writer.sendQueue.size()>0){
                 try {
                     String message = writer.sendQueue.remove();
-                    if(message.equals("exit")){
-                        break;
+                    if(message.equals("stop")){
+                        writer.isSafe = false;
                     }
-                    writer.serverInterface.sendMessage(writer.nickname, message );
+                    writer.serverInterface.sendMessage(writer.nickname, message);
                     
 				} catch (RemoteException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 
@@ -75,10 +84,10 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
             if(writer.sendStudentQueue.size()>0){
                 try {
                     Student student = writer.sendStudentQueue.remove();
-                    writer.serverInterface.sendStudent(writer.nickname, student );
+                    System.out.println("hehehe");
+                    writer.serverInterface.sendStudent(student );
                     
 				} catch (RemoteException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 
@@ -105,31 +114,40 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
 
     public void messageFromServer(String message) {
         System.out.println(message);
-        if(message == "stop"){
+        if(message.equals("[controller]: exit")){
             this.isSafe = false;
         }
-        else{
-            receiveQueue.add(message);
-        }
+        receiveQueue.add(message);
+
     }
     public void studentFromServer(Student student){
+        System.out.println("boom");
+        System.out.println(student.getName());
         if(!student.getName().equals("Process "+this.nickname))
             receiveStudentQueue.add(student);
     }
 
     public Queue<String> getReceiveQueue(){
-        receiveQueue.clear();
-        return receiveQueue;
+        Queue<String> temp = new LinkedList<>();
+        for(String s : receiveQueue){
+            temp.add(s);
+        }
+        //receiveQueue.clear();
+        return temp;
     }
-    public Queue<Student> getRecievedStudentQueue(){
-        receiveStudentQueue.clear();
-        return receiveStudentQueue;
+    public Queue<Student> getReceivedStudentQueue(){
+        Queue<Student> temp = new LinkedList<>();
+        for(Student s : receiveStudentQueue){
+            temp.add(s);
+        }
+        //receiveStudentQueue.clear();
+        return temp;
     }
-    public void addToSendQueue(String message){
-        sendQueue.add(message);
+    public void addToSendQueue(Writer w, String message){
+        w.sendQueue.add(message);
     }
-    public void addToStudentSendQueue(Student s){
-        sendStudentQueue.add(s);
+    public void addToStudentSendQueue(Writer w, Student s){
+        w.sendStudentQueue.add(s);
     }
 
     public boolean getIsSafe(){
@@ -191,7 +209,19 @@ class DBWriter implements Runnable{
             //             System.out.println("NOTHING");
             //   }
             // }
-            this.read(2, conn);
+            this.read(2);
+            writer.addToStudentSendQueue(writer,s);
+            System.out.println("sent");
+            this.write(s);
+            while(true){
+                Queue<Student> q = writer.getReceivedStudentQueue();
+                if(q.size()>0){
+                    Student st = q.remove();
+                    System.out.println(st.getName()+"laka");
+                    this.write(st);
+                    break;
+                }
+            }
         }
         catch(Exception e){
             e.printStackTrace();
@@ -199,7 +229,8 @@ class DBWriter implements Runnable{
     }
     //Read from the database
 
-    public Student read(int t, Connection con)throws Exception, ClassNotFoundException {
+    public Student read(int t)throws Exception, ClassNotFoundException {
+        Connection con= DriverManager.getConnection("jdbc:mysql://localhost:3306/rmi"+nickname, "root", "asdf;lkj");
 	      try {
  		      FileWriter logwtr = new FileWriter("Writers.log",true);
  		      BufferedWriter bw = new BufferedWriter(logwtr);
@@ -276,7 +307,9 @@ class DBWriter implements Runnable{
     }
     //Write a student into its db.
 
-    public void write(Student s,  Connection conn)throws Exception{
+    public void write(Student s)throws Exception{
+        Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/rmi"+nickname, "root", "asdf;lkj");
+
         //Execute a query 
 	      System.out.println("Creating statement...");
 	      
