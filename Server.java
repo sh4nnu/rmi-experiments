@@ -34,7 +34,9 @@ public class Server extends UnicastRemoteObject implements ServerInterface {
         message = "[" + nickname + "]: " + message;
         sendToAll(message);
     }
-
+    public void sendStudent(Student student){
+        sendStudentToAll(student);
+    }
     private void registerWriter(String nickname) {
         try {
             WriteInterface writer = (WriteInterface) Naming.lookup("rmi://localhost:5000/"+nickname);
@@ -49,6 +51,16 @@ public class Server extends UnicastRemoteObject implements ServerInterface {
         for(Process w : writers){
             try {
                 w.getWriter().messageFromServer(message);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void sendStudentToAll(Student student) {
+        for(Process w : writers){
+            try {
+                w.getWriter().studentFromServer(student);
             } catch (Exception e) {
                 e.printStackTrace();
             }

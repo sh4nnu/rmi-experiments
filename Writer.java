@@ -16,9 +16,10 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
     private String nickname;
     protected ServerInterface serverInterface;
     boolean isSafe = true;
-    Queue<String> receiveQueue = new LinkedList<>();
-    Queue<String> sendQueue = new LinkedList<>();
-    Queue<Student> sendStudentQueue = new LinkedList<>();
+    Queue<String> receiveQueue = new LinkedList<>(); // queue for received messages
+    Queue<String> sendQueue = new LinkedList<>();    // queue for messages to be sent
+    Queue<Student> sendStudentQueue = new LinkedList<>(); // queue for Student objects to be sent
+    Queue<Student> receiveStudentQueue = new LinkedList<>(); // queue for received Student objects
 
     public Writer(String nickname, ServerInterface serverInterface)throws RemoteException{
         super();
@@ -56,7 +57,7 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
         writer.registerWithServer(writer.nickname);
         Runnable writerComm = new DBWriter(writer.nickname, writer);
         executor.execute(writerComm);
-        while(true){
+        while(writer.getIsSafe()){
             if(writer.sendQueue.size()>0){
                 try {
                     String message = writer.sendQueue.remove();
@@ -64,6 +65,17 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
                         break;
                     }
                     writer.serverInterface.sendMessage(writer.nickname, message );
+                    
+				} catch (RemoteException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+            }
+            if(writer.sendStudentQueue.size()>0){
+                try {
+                    Student student = writer.sendStudentQueue.remove();
+                    writer.serverInterface.sendStudent(writer.nickname, student );
                     
 				} catch (RemoteException e) {
 					// TODO Auto-generated catch block
@@ -100,9 +112,18 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
             receiveQueue.add(message);
         }
     }
+    public void studentFromServer(Student student){
+        if(!student.getName().equals("Process "+this.nickname))
+            receiveStudentQueue.add(student);
+    }
 
     public Queue<String> getReceiveQueue(){
+        receiveQueue.clear();
         return receiveQueue;
+    }
+    public Queue<Student> getRecievedStudentQueue(){
+        receiveStudentQueue.clear();
+        return receiveStudentQueue;
     }
     public void addToSendQueue(String message){
         sendQueue.add(message);
@@ -193,7 +214,6 @@ class DBWriter implements Runnable{
  		      System.out.println("An error occurred.");
  		      e.printStackTrace();
  		    }
-	      // JDBC driver name and database URL 
 	     
 	      //Execute a query 
 	      System.out.println("Creating statement..."); 
