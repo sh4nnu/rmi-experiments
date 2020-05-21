@@ -121,7 +121,6 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
 
     }
     public void studentFromServer(Student student){
-        System.out.println("boom");
         System.out.println(student.getName());
         if(!student.getName().equals("Process "+this.nickname))
             receiveStudentQueue.add(student);
@@ -181,7 +180,8 @@ class DBWriter implements Runnable{
             int percent = 01;
             String email = "mani.gmail";
          
-            // while(writer.getIsSafe()){
+            while(writer.getIsSafe()){
+                Thread.sleep(2000);
                 Student s = new Student();
 	   	        t  = t% 7; 
                 String query = "SELECT * FROM SAMPLERMI";
@@ -193,35 +193,42 @@ class DBWriter implements Runnable{
                         break;
                     }
                 }
-                s.setID(0); 
+                s.setID(t); 
                 s.setName(name); 
                 s.setBranch(branch); 
                 s.setPercent(percent); 
                 s.setEmail(email); 
                 s.setClock(c);
-            //     switch(rand.nextInt(2)) {
-            //         case 1:
-            //             this.read(2, conn);
-            //             //TODO: request write || add to write queue || write func                        
-            //             break;
-
-            //         default:
-            //             System.out.println("NOTHING");
-            //   }
-            // }
-            this.read(2);
-            writer.addToStudentSendQueue(writer,s);
-            System.out.println("sent");
-            this.write(s);
-            while(true){
-                Queue<Student> q = writer.getReceivedStudentQueue();
-                if(q.size()>0){
-                    Student st = q.remove();
-                    System.out.println(st.getName()+"laka");
-                    this.write(st);
-                    break;
-                }
+                switch(rand.nextInt(2)) {
+                    case 1:
+                        writer.addToStudentSendQueue(writer, s);
+                        this.write(s);
+                        break;
+                    case 0:
+                        x = rand.nextInt(7);
+                        Student st = this.read(x);
+                        break;
+                    default:
+                        System.out.println("NOTHING");
+              }
+ 
+                 //sync with other writer processes
+                 Queue<Student> temp = writer.getReceivedStudentQueue();
+                 
+                 if(temp.size() > 0) {
+                     System.out.println("Writer "+nickname+" is going to start sync");
+                     syncDB synch = new syncDB(temp, this, nickname);
+                     Thread thrd_sync = new Thread(synch);
+                     thrd_sync.start();
+                 }
+                 
+                 System.out.println("WRITER "+nickname+" "+t); 
+                 t++;
+                 c++;
+                 
             }
+            System.out.println("Leaving... bye bye.");
+
         }
         catch(Exception e){
             e.printStackTrace();
@@ -379,4 +386,97 @@ class DBWriter implements Runnable{
     public void messageFromServer(String message) {
         System.out.println(message);
     }
-} 
+}
+class syncDB  implements Runnable{
+    Queue<Student> q = new LinkedList<>();
+	int tempstatus = 0;
+    DBWriter dbWriter = null;
+    String nickname="";
+    Student s;
+    
+	
+
+	
+	syncDB(Queue<Student> que, DBWriter DBW, String nickname){
+		this.q = que;
+        this.dbWriter = DBW;
+        this.nickname = nickname;
+	}
+	
+	public void run() {
+        Random  rand = new Random();
+
+		System.out.println("Thread for sync start");
+		int t = tempstatus;
+		try {
+			Thread.sleep(rand.nextInt(500));
+		} catch (InterruptedException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		try {
+		      FileWriter logwtr = new FileWriter("Writers.log",true);
+		      BufferedWriter bw = new BufferedWriter(logwtr);
+		      PrintWriter pw = new PrintWriter(bw);
+		      System.out.println("Logging.....");
+
+		      pw.println("P"+(this.nickname)+": Synch start "+t);
+	          pw.flush();
+		      logwtr.close();
+		      
+//		      System.out.println("Successfully wrote to the file.");
+		 } catch (Exception e) {
+		      System.out.println("An error occurred.");
+		      e.printStackTrace();
+		    }
+		try {
+			
+	   	 while(q.size() >0) {
+	   		 s = q.remove();
+	   		 dbWriter.write(s);
+	   		try {
+				
+			      FileWriter logwtr = new FileWriter("Writers.log",true);
+			      BufferedWriter bw = new BufferedWriter(logwtr);
+			      PrintWriter pw = new PrintWriter(bw);
+			      System.out.println("Logging....");
+
+			      pw.println("UPdate from "+s.getName()+" for id: "+s.getId()+" percent: "+s.getPercent());
+
+//			      logwtr.append();
+		          pw.flush();
+			      logwtr.close();
+//			      System.out.println("Successfully wrote to the file.");
+			    } catch (Exception e) {
+			      System.out.println("An error occurred.");
+			      e.printStackTrace();
+			    }
+	   	 }
+   		//  Config.synchStart[this.status_bit] = false;
+
+		 } catch (Exception e) {
+		      System.out.println("An error occurred.");
+		      e.printStackTrace();
+		    }
+		try {
+			
+		      FileWriter logwtr = new FileWriter("Server1.log",true);
+		      BufferedWriter bw = new BufferedWriter(logwtr);
+		      PrintWriter pw = new PrintWriter(bw);
+		      System.out.println("LOGGIGN");
+
+		      pw.println("P"+nickname+": Synch end "+t);
+
+//		      logwtr.append();
+	          pw.flush();
+		      logwtr.close();
+//		      System.out.println("Successfully wrote to the file.");
+		    } catch (Exception e) {
+		      System.out.println("An error occurred.");
+		      e.printStackTrace();
+		    }
+
+
+	
+	}
+}
