@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 
 public class Writer extends UnicastRemoteObject implements WriteInterface {
@@ -85,7 +86,7 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
                 try {
                     Student student = writer.sendStudentQueue.remove();
                     System.out.println("hehehe");
-                    writer.serverInterface.sendStudent(student );
+                    writer.serverInterface.sendStudent(student);
                     
 				} catch (RemoteException e) {
 					e.printStackTrace();
@@ -152,6 +153,7 @@ public class Writer extends UnicastRemoteObject implements WriteInterface {
     public boolean getIsSafe(){
         return this.isSafe;
     }
+
 }
 
 class DBWriter implements Runnable{
@@ -167,50 +169,22 @@ class DBWriter implements Runnable{
 
     public void run(){
         try{
-            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/rmi"+nickname, "root", "asdf;lkj");
-            Statement stmt = conn.createStatement();
-
+            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/rmi"+nickname, "root", "bhanuprakash");
             System.out.println("Writer ready");
             Random  rand = new Random();
             int t =0, x = 0, c = 0;
-            boolean idExists = false;
             Thread.sleep(2000);
-            String name = "Process "+nickname ;
-            String branch = "cse";
-            int percent = 01;
-            String email = "mani.gmail";
          
             while(writer.getIsSafe()){
                 Thread.sleep(2000);
-                Student s = new Student();
-	   	        t  = t% 7; 
-                String query = "SELECT * FROM SAMPLERMI";
-                ResultSet rs = stmt.executeQuery(query);
-                while(rs.next()) {
-                    if(t == rs.getInt("id")) {
-                        idExists = true;
-                        percent = rs.getInt("percentage")+5;
-                        break;
-                    }
-                }
-                s.setID(t); 
-                s.setName(name); 
-                s.setBranch(branch); 
-                s.setPercent(percent); 
-                s.setEmail(email); 
-                s.setClock(c);
-                switch(rand.nextInt(2)) {
-                    case 1:
-                        writer.addToStudentSendQueue(writer, s);
-                        this.write(s);
-                        break;
-                    case 0:
-                        x = rand.nextInt(7);
-                        Student st = this.read(x);
-                        break;
-                    default:
-                        System.out.println("NOTHING");
-              }
+                
+                Tread r = new Tread(this,nickname);
+       	     	Thread tr = new Thread(r);
+       	     	tr.start();
+       	     	
+                Twrite w = new Twrite(this,nickname);
+       	     	Thread tw = new Thread(w);
+       	     	tw.start();
  
                  //sync with other writer processes
                  Queue<Student> temp = writer.getReceivedStudentQueue();
@@ -237,7 +211,7 @@ class DBWriter implements Runnable{
     //Read from the database
 
     public Student read(int t)throws Exception, ClassNotFoundException {
-        Connection con= DriverManager.getConnection("jdbc:mysql://localhost:3306/rmi"+nickname, "root", "asdf;lkj");
+        Connection con= DriverManager.getConnection("jdbc:mysql://localhost:3306/rmi"+nickname, "root", "bhanuprakash");
 	      try {
  		      FileWriter logwtr = new FileWriter("Writers.log",true);
  		      BufferedWriter bw = new BufferedWriter(logwtr);
@@ -315,7 +289,7 @@ class DBWriter implements Runnable{
     //Write a student into its db.
 
     public void write(Student s)throws Exception{
-        Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/rmi"+nickname, "root", "asdf;lkj");
+        Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/rmi"+nickname, "root", "bhanuprakash");
 
         //Execute a query 
 	      System.out.println("Creating statement...");
@@ -386,6 +360,98 @@ class DBWriter implements Runnable{
     public void messageFromServer(String message) {
         System.out.println(message);
     }
+}
+
+
+class Tread implements Runnable{
+    Queue<Student> q = new LinkedList<>();
+	int tempstatus = 0;
+    DBWriter dbWriter = null;
+    String nickname="";
+    Student s;
+    Random  rand2 = new Random();
+
+    
+    Tread(DBWriter DBW, String nickname){
+        this.dbWriter = DBW;
+        this.nickname = nickname;
+    }
+    
+    public void run() {
+		System.out.println("Thread for Individual Read");
+		while(dbWriter.writer.getIsSafe()) {
+			int t1 = rand2.nextInt(7);
+			try {
+				Thread.sleep(2000);
+				dbWriter.read(t1);
+			} 
+			catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+    }
+}
+
+
+class Twrite implements Runnable{
+    Queue<Student> q = new LinkedList<>();
+	int tempstatus = 0;
+    DBWriter dbWriter = null;
+    String nickname="";
+    Student s;
+    Random  rand2 = new Random();
+    boolean idExists = false;
+    Statement stmt1;
+    
+    Twrite(DBWriter DBW, String nickname){
+        this.dbWriter = DBW;
+        this.nickname = nickname;
+    }
+
+	@Override
+	public void run() {
+        System.out.println("Writer ready");
+        int t =0, x = 0, c = 0;
+        try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+        String name = "Process "+nickname ;
+        String branch = "cse";
+        int percent = 01;
+        String email = "mani.gmail";
+        
+		while(dbWriter.writer.getIsSafe()) {
+			try {
+				 Thread.sleep(2000);	 
+				 int t1 = rand2.nextInt(7);
+				 s = dbWriter.read(t1);
+		        if(s !=null) {
+			    		  percent = s.getPercent()+1;
+			    }
+		        else{
+					s = new Student();
+				}
+			      
+
+		         s.setID(t1); 
+		         s.setName(name); 
+		         s.setBranch(branch); 
+		         s.setPercent(percent); 
+		         s.setEmail(email); 
+		         s.setClock(c);
+		         percent = 1;
+		         dbWriter.write(s);
+		         c++;
+			} 
+			catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+	}
 }
 class syncDB  implements Runnable{
     Queue<Student> q = new LinkedList<>();
@@ -460,7 +526,7 @@ class syncDB  implements Runnable{
 		    }
 		try {
 			
-		      FileWriter logwtr = new FileWriter("Server1.log",true);
+		      FileWriter logwtr = new FileWriter("Writers.log",true);
 		      BufferedWriter bw = new BufferedWriter(logwtr);
 		      PrintWriter pw = new PrintWriter(bw);
 		      System.out.println("LOGGIGN");
